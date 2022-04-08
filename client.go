@@ -352,6 +352,38 @@ func GetConfig(ctx context.Context, conn *grpc.ClientConn, js string, id int64) 
 	}
 }
 
+// GetOper returns the operational data for specific YANG path elements
+// described in 'js'.
+func GetOper(ctx context.Context, conn *grpc.ClientConn, js string, id int64) (string, error) {
+	var s string
+	// 'c' is the gRPC stub.
+	c := pb.NewGRPCConfigOperClient(conn)
+
+	// 'a' is the object we send to the router via the stub.
+	a := pb.GetOperArgs{ReqId: id, Yangpathjson: js}
+
+	// 'st' is the streamed result that comes back from the target.
+	st, err := c.GetOper(context.Background(), &a)
+	if err != nil {
+		return s, errors.Wrap(err, "gRPC GetConfig failed")
+	}
+
+	for {
+		// Loop through the responses in the stream until there is nothing left.
+		r, err := st.Recv()
+		if err == io.EOF {
+			return s, nil
+		}
+		if len(r.GetErrors()) != 0 {
+			si := strconv.FormatInt(id, 10)
+			return s, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+		}
+		if len(r.GetYangjson()) > 0 {
+			s += r.GetYangjson()
+		}
+	}
+}
+
 // CLIConfig configs the target with CLI commands described in 'cli'.
 func CLIConfig(ctx context.Context, conn *grpc.ClientConn, cli string, id int64) error {
 	// 'c' is the gRPC stub.
