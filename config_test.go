@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	xr "github.com/nleiva/xrgrpc"
+	xr "github.com/al5147/xrgrpc"
 )
 
 const (

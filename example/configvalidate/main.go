@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	xr "github.com/nleiva/xrgrpc"
-	"github.com/nleiva/xrgrpc/proto/telemetry"
-	bgp "github.com/nleiva/xrgrpc/proto/telemetry/bgp"
+	xr "github.com/al5147/xrgrpc"
+	"github.com/al5147/xrgrpc/proto/telemetry"
+	bgp "github.com/al5147/xrgrpc/proto/telemetry/bgp"
 )
 
 // NeighborConfig uses asplain notation for AS numbers (RFC5396)

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	pb "github.com/nleiva/xrgrpc/proto/ems"
+	pb "github.com/al5147/xrgrpc/proto/ems"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

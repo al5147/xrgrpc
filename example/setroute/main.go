@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	xr "github.com/nleiva/xrgrpc"
+	xr "github.com/al5147/xrgrpc"
 )
 
 func timeTrack(start time.Time) {

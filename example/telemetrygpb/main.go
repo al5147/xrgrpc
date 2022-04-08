@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	xr "github.com/nleiva/xrgrpc"
-	"github.com/nleiva/xrgrpc/proto/telemetry"
-	lldp "github.com/nleiva/xrgrpc/proto/telemetry/lldp"
+	xr "github.com/al5147/xrgrpc"
+	"github.com/al5147/xrgrpc/proto/telemetry"
+	lldp "github.com/al5147/xrgrpc/proto/telemetry/lldp"
 	"github.com/pkg/errors"
 )
 

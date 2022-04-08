@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	xr "github.com/nleiva/xrgrpc"
-	pb "github.com/nleiva/xrgrpc/proto/ems"
+	xr "github.com/al5147/xrgrpc"
+	pb "github.com/al5147/xrgrpc/proto/ems"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

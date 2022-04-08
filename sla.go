@@ -5,7 +5,7 @@ import (
 	"io"
 	"net"
 
-	pb "github.com/nleiva/xrgrpc/proto/sla"
+	pb "github.com/al5147/xrgrpc/proto/sla"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

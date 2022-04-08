@@ -20,7 +20,7 @@ echo "export PATH=$PATH:/usr/lib/go-1.8/bin:/home/ubuntu/go/bin" >> /home/ubuntu
 . /home/ubuntu/.profile
 
 # Get the IOS XR gRPC library
-go get github.com/nleiva/xrgrpc
+go get github.com/al5147/xrgrpc
 
 # Just change ownership as previous commands were executed by root.
 chown -R ubuntu:ubuntu /home/ubuntu/go/*

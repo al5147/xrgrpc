@@ -13,8 +13,8 @@ import (
 	"time"
 
 	proto "github.com/golang/protobuf/proto"
-	xr "github.com/nleiva/xrgrpc"
-	"github.com/nleiva/xrgrpc/proto/telemetry"
+	xr "github.com/al5147/xrgrpc"
+	"github.com/al5147/xrgrpc/proto/telemetry"
 )
 
 func prettyprint(b []byte) ([]byte, error) {

@@ -1,4 +1,4 @@
-module github.com/nleiva/xrgrpc
+module github.com/al5147/xrgrpc
 
 require (
 	github.com/golang/protobuf v1.2.0

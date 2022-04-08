@@ -1,10 +1,10 @@
 # gRPC library for Cisco IOS XR
 
-[![GoDoc](https://godoc.org/github.com/nleiva/xrgrpc?status.svg)](https://godoc.org/github.com/nleiva/xrgrpc) 
-[![Build Status](https://travis-ci.org/nleiva/xrgrpc.svg?branch=master)](https://travis-ci.org/nleiva/xrgrpc) 
-[![codecov](https://codecov.io/gh/nleiva/xrgrpc/branch/master/graph/badge.svg)](https://codecov.io/gh/nleiva/xrgrpc) 
-[![Go Report Card](https://goreportcard.com/badge/github.com/nleiva/xrgrpc)](https://goreportcard.com/report/github.com/nleiva/xrgrpc)
-[![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/nleiva/xrgrpc)
+[![GoDoc](https://godoc.org/github.com/al5147/xrgrpc?status.svg)](https://godoc.org/github.com/al5147/xrgrpc) 
+[![Build Status](https://travis-ci.org/al5147/xrgrpc.svg?branch=master)](https://travis-ci.org/al5147/xrgrpc) 
+[![codecov](https://codecov.io/gh/al5147/xrgrpc/branch/master/graph/badge.svg)](https://codecov.io/gh/al5147/xrgrpc) 
+[![Go Report Card](https://goreportcard.com/badge/github.com/al5147/xrgrpc)](https://goreportcard.com/report/github.com/al5147/xrgrpc)
+[![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/al5147/xrgrpc)
 
 Minimalistic library to interact with IOS XR devices using the gRPC framework. Look at the [IOS XR proto file](proto/ems_grpc.proto) for the description of the service interface and the structure of the payload messages. gRPC uses protocol buffers as the Interface Definition Language (IDL).
 
@@ -20,7 +20,7 @@ Minimalistic library to interact with IOS XR devices using the gRPC framework. L
 
 The end goal is to enable use-cases where multiple interactions with devices are required. gRPC arises as a strong option to single interface network elements to retrieve info from the devices, apply configurations to it, generate telemetry streams from them, programming the RIB/FIB and so on. The following is a very simple config-validate example:
 
-![oc-config-validate](https://github.com/nleiva/xrgrpc/blob/gh-pages/static/images/oc-config-validateH.gif)
+![oc-config-validate](https://github.com/al5147/xrgrpc/blob/gh-pages/static/images/oc-config-validateH.gif)
 
 ## Table of Contents
 
@@ -782,7 +782,7 @@ output from [2001:420:2cff:1204::7816:1]:57344
 2018/05/29 15:03:19 This process took 762.440427ms
 ```
 
-![ipv4-ping](https://github.com/nleiva/xrgrpc/blob/gh-pages/static/images/ipv4_ping.svg)
+![ipv4-ping](https://github.com/al5147/xrgrpc/blob/gh-pages/static/images/ipv4_ping.svg)
 
 - IPv6 Ping (`example/action` with [ping6.json](example/input/action/ping6.json))
 
@@ -834,7 +834,7 @@ The extended output looks like this:
 }
 ```
 
-![ipv6-ping](https://github.com/nleiva/xrgrpc/blob/gh-pages/static/images/ipv6_ping.svg)
+![ipv6-ping](https://github.com/al5147/xrgrpc/blob/gh-pages/static/images/ipv6_ping.svg)
 
 #### Traceroute
 
@@ -896,7 +896,7 @@ On the router
 RP/0/RP0/CPU0:May 29 19:23:59.297 UTC: emsd[1096]: %OS-SYSLOG-1-LOG_ALERT : gRPC Generated: Device will be under maintenance for 2 hrs for planned activities
 ```
 
-![log](https://github.com/nleiva/xrgrpc/blob/gh-pages/static/images/log.svg)
+![log](https://github.com/al5147/xrgrpc/blob/gh-pages/static/images/log.svg)
 
 #### Crypto Key Generation
 
@@ -917,7 +917,7 @@ RP/0/RP0/CPU0:May 29 19:26:06.907 UTC: cepki[420]: %SECURITY-CEPKI-6-KEY_INFO : 
 RP/0/RP0/CPU0:May 29 19:26:06.917 UTC: cepki[420]: %SECURITY-CEPKI-6-INFO : key database updated
 ```
 
-![crypto](https://github.com/nleiva/xrgrpc/blob/gh-pages/static/images/crypto.svg)
+![crypto](https://github.com/al5147/xrgrpc/blob/gh-pages/static/images/crypto.svg)
 
 ### Bypass the config file
 
