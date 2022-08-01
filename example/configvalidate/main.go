@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	xr "github.com/al5147/xrgrpc"
-	"github.com/al5147/xrgrpc/proto/telemetry"
-	bgp "github.com/al5147/xrgrpc/proto/telemetry/bgp"
+	xr "github.com/nleiva/xrgrpc"
+	"github.com/nleiva/xrgrpc/proto/telemetry"
+	bgp "github.com/nleiva/xrgrpc/proto/telemetry/bgp"
+	"google.golang.org/protobuf/proto"
 )
 
 // NeighborConfig uses asplain notation for AS numbers (RFC5396)
@@ -48,10 +48,9 @@ func main() {
 
 	// Manually specify target parameters.
 	router, err := xr.BuildRouter(
-		xr.WithUsername("cisco"),
-		xr.WithPassword("cisco"),
-		xr.WithHost("[2001:420:2cff:1204::5502:1]:57344"),
-		xr.WithCert("../input/certificate/ems5502-1.pem"),
+		xr.WithUsername("admin"),
+		xr.WithPassword("C1sco12345"),
+		xr.WithHost("sandbox-iosxr-1.cisco.com:57777"),
 		xr.WithTimeout(45),
 	)
 	if err != nil {
@@ -97,7 +96,11 @@ func main() {
 
 	// Get the BGP config from the device
 	id++
-	output, err := xr.GetConfig(ctx, conn, "{\"openconfig-bgp:bgp\": [null]}", id)
+	input := `{"openconfig-network-instance:network-instances":
+	{"network-instance":[{"name":"default","protocols":{"protocol":[{"bgp":{}}]}}]}}`
+
+	output, err := xr.GetConfig(ctx, conn, input, id)
+
 	if err != nil {
 		log.Fatalf("could not get the config from %s, %v", router.Host, err)
 	}
@@ -165,7 +168,7 @@ func main() {
 			}
 			rasn := nbr.GetRemoteAs()
 			state := nbr.GetConnectionState()
-			raddr := nbr.GetConnectionRemoteAddress().Ipv6Address.GetValue()
+			raddr := nbr.GetConnectionRemoteAddress().Ipv6Address
 
 			fmt.Printf("BGP Neighbor; IP: %v, ASN: %v, State %s \n\n", raddr, rasn, state)
 

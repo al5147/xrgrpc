@@ -45,9 +45,6 @@ The end goal is to enable use-cases where multiple interactions with devices are
       - [JSON (GPBKV): OpenConfig](#json-gpbkv-openconfig)
       - [GPB (Protobuf)](#gpb-protobuf)
     + [Config and Validate](#config-and-validate)
-    + [Service Layer API](#service-layer-api)
-      - [Add an IPv6 route](#add-an-ipv6-route)
-      - [SLA IOS XR config](#sla-ios-xr-config)
     + [Actions](#actions)
       - [Ping](#ping)
       - [Traceroute](#traceroute)
@@ -62,7 +59,7 @@ The end goal is to enable use-cases where multiple interactions with devices are
 
 ## Prerequisite Tools
 
-* [Go (at least Go 1.11)](https://golang.org/dl/)
+* [Go (at least Go 1.17)](https://golang.org/dl/)
 
 ## Usage
 
@@ -72,28 +69,48 @@ CLI examples to use the library are provided in the [example](example/) folder. 
 
 Retrieves the config from one target device described in [config.json](example/input/config.json), for the YANG paths specified in [yangpaths.json](example/input/yangpaths.json). If you want to see it using [OpenConfig models](https://github.com/openconfig/public/tree/master/release/models), you can issue `./getconfig -ypath "../input/yangocpaths.json"` instead.
 
-- example/getconfig
+- `example/getconfig`
 
 ```console
-$ ./getconfig
+example/getconfig$  go run main.go 
 
-Config from [2001:420:2cff:1204::5502:1]:57344
-{
+config from sandbox-iosxr-1.cisco.com:57777
+ {
  "data": {
-  "Cisco-IOS-XR-ifmgr-cfg:interface-configurations": {
-   "interface-configuration": [
+  "openconfig-interfaces:interfaces": {
+   "interface": [
     {
-     "active": "act",
-     "interface-name": "Loopback60",
-     "interface-virtual": [
-      null
-     ],
-     "Cisco-IOS-XR-ipv6-ma-cfg:ipv6-network": {
-      "addresses": {
-       "regular-addresses": {
-        "regular-address": [
+     "name": "BVI511",
+     "config": {
+      "name": "BVI511",
+      "type": "iana-if-type:propVirtual"
+     },
+     "subinterfaces": {
+      "subinterface": [
+       {
+        "index": 0,
+        "openconfig-if-ip:ipv4": {
+         "addresses": {
+          "address": [
+           {
+            "ip": "10.200.188.33",
+            "config": {
+             "ip": "10.200.188.33",
+             "prefix-length": 24
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+
 ...
-2017/07/21 15:11:47 This process took 1.195469855s
+
+2022/05/11 16:55:36 This process took 715.136564ms
 ```
 
 ### Show Commands
@@ -702,40 +719,16 @@ BGP Neighbor; IP: 2001:db8:cafe::2, ASN: 64512, State bgp-st-idle
 BGP Neighbor; IP: 2001:db8:cafe::2, ASN: 64512, State bgp-st-estab
 ```
 
-### Service Layer API
-
-#### Add an IPv6 route
-
-Add a new route to the IPv6 routing table. 
-
-- example/setroute
-
-```console
-$ ./setroute -pfx "2001:db8:1413::/48" -nh "2001:db8:cafe::2"
-2017/07/25 15:02:01 This process took 329.560647ms
-```
-
-Which results in:
-
-```console
-RP/0/RP0/CPU0:mrstn-5502-1.cisco.com#show route ipv6 unicast 2001:db8:1413::/48
-Tue Jul 25 15:02:20.369 EDT
- 
-Routing entry for 2001:db8:1413::/48
-  Known via "application Service-layer", distance 2, metric 0
-  Installed Jul 25 15:01:54.011 for 00:00:27
-  Routing Descriptor Blocks
-    2001:db8:cafe::2, from ::
-      Route metric is 0
-  No advertising protos.
-```
-
-#### SLA IOS XR config
+The telemetry subscription config is:
 
 ```
-!! IOS XR Configuration version = 6.2.2
-grpc
- service-layer
+telemetry model-driven
+ sensor-group BGPNeighbor
+  sensor-path Cisco-IOS-XR-ipv4-bgp-oper:bgp/instances/instance/instance-active/default-vrf/afs/af/neighbor-af-table/neighbor
+ !
+ subscription BGP
+  sensor-group-id BGPNeighbor sample-interval 2000
+ !
 !
 ```
 
@@ -754,35 +747,10 @@ Cisco-IOS-XR-ipv4-bgp-act.yang
 Cisco-IOS-XR-ipv4-ospf-act.yang
 Cisco-IOS-XR-ipv4-ping-act.yang
 Cisco-IOS-XR-ipv4-traceroute-act.yang
-Cisco-IOS-XR-ipv6-ospfv3-act.yang
-Cisco-IOS-XR-ipv6-ping-act.yang
-Cisco-IOS-XR-ipv6-traceroute-act.yang
-Cisco-IOS-XR-isis-act.yang
-Cisco-IOS-XR-lib-keychain-act.yang
-Cisco-IOS-XR-ping-act.yang
-Cisco-IOS-XR-snmp-test-trap-act.yang
-Cisco-IOS-XR-syslog-act.yang
-Cisco-IOS-XR-sysmgr-act.yang
-Cisco-IOS-XR-traceroute-act.yang
-Cisco-IOS-XR-upgrade-fpd-ng-act.yang
+...
 ```
 
 #### Ping
-
-- IPv4 Ping (`example/action` with [ping4.json](example/input/action/ping4.json))
-
-```console
-$ ./action -act "../input/action/ping4.json"
-
-output from [2001:420:2cff:1204::7816:1]:57344
- {
- "Cisco-IOS-XR-ping-act:output": {...}
-}
-
-2018/05/29 15:03:19 This process took 762.440427ms
-```
-
-![ipv4-ping](https://github.com/al5147/xrgrpc/blob/gh-pages/static/images/ipv4_ping.svg)
 
 - IPv6 Ping (`example/action` with [ping6.json](example/input/action/ping6.json))
 
@@ -926,11 +894,10 @@ You can manually define the target without the config file [config.json](example
 ```go
 // Manually specify target parameters.
 router, err := xr.BuildRouter(
-	xr.WithUsername("cisco"),
-	xr.WithPassword("cisco"),
-	xr.WithHost("[2001:420:2cff:1204::5502:2]:57344"),
-	xr.WithCert("../input/certificate/ems5502-2.pem"),
-	xr.WithTimeout(5),
+  xr.WithUsername("admin"),
+  xr.WithPassword("C1sco12345"),
+  xr.WithHost("sandbox-iosxr-1.cisco.com:57777"),
+  xr.WithTimeout(45),
 )
 ```
 
@@ -939,12 +906,16 @@ router, err := xr.BuildRouter(
 The following is the configuration required on the IOS XR device in order to enable gRPC dial-in with TLS support.
 
 ```
-!! IOS XR Configuration version = 6.2.2
-grpc
- port 57344
- tls
+tpa
+ vrf default
+  address-family ipv4
+   default-route mgmt
+  !
  !
- address-family ipv6
+!
+grpc
+ port 57777
+ address-family ipv4
 !
 ```
 
@@ -960,57 +931,57 @@ mrstn-5502-1 emsd: [1058]: %MGBL-EMS-4-EMSD_PORT_RANGE : The configured port 565
 
 Update 6/24/2019: You no longer need to download the certicate file manually. If you don't specify a file, it will be downloaded automatically as in the [getconfig](example/getconfig/main.go) example.
 
-You can optionally retrive the `ems.pem` file from the IOS XR device (after enabling gRPC/TLS) and put it in the [input](example/input) folder (or any other location specified in [config.json](example/input/config.json)). You can find the file in the router on either `/misc/config/grpc/` or `/var/xr/config/grpc`.
-
-- /var/xr/config/grpc
-
-```console
-$ ls -la
-total 20
-drwxr-xr-x  3 root root 4096 Jul  5 17:47 .
-drwxr-xr-x 10 root root 4096 Jul  3 12:50 ..
-drwx------  2 root root 4096 Jul  3 12:50 dialout
--rw-------  1 root root 1675 Jul  5 17:47 ems.key
--rw-rw-rw-  1 root root 1513 Jul  5 17:47 ems.pem
-```
-
-### Self-signed certificate for testing
+### Self-signed certificate for package testing
 
 This needs to be renewed once a year.
 
 ```console
-xrgrpc/test$ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
-Generating a 4096 bit RSA private key
-......................................................................................++
-........................................................++
-writing new private key to 'key.pem'
------
+$ openssl req -new -x509 -nodes -subj '/C=US/CN=localhost' \
+              -addext "subjectAltName = DNS:localhost" \
+              -newkey rsa:4096 -keyout test/key.pem -out \
+              test/cert.pem -days 365
 ```
 
-## Compiling the proto files
+## Generating Go binding from protobuf files
 
 The Go generated code in [ems_grpc.pb.go](proto/ems/ems_grpc.pb.go) is the result of the following:
 
-- proto/ems
+- `proto/ems`
 
 ```console
-$ protoc --go_out=plugins=grpc:. ems_grpc.proto
+$ protoc --go_out=. --go_opt=paths=source_relative \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+    --go_opt=Mproto/ems/ems_grpc.proto=proto/ems \
+    --go-grpc_opt=Mproto/ems/ems_grpc.proto=proto/ems \
+    proto/ems/ems_grpc.proto
 ```
 
-The Go generated code in [lldp_neighbor.pb.go](proto/telemetry/lldp/lldp_neighbor.pb.go) is the result of the following:
-
-- proto/telemetry/lldp
+- The Go generated code in [bgp_nbr_bag.pb.go](proto/telemetry/bgp/bgp_nbr_bag.pb.go) is the result of the following:
 
 ```console
-$ protoc --go_out=. lldp_neighbor.proto 
+$ protoc --go_out=. \
+    --go_opt=Mproto/telemetry/bgp/bgp_nbr_bag.proto=proto/telemetry/bgp \
+    proto/telemetry/bgp/bgp_nbr_bag.proto
 ```
 
-## Compiling the Examples
-
-Simply execute `go build` on the corresponding example folder. E.g.
-
-- example/telemetry
+- The Go generated code in [lldp_neighbor.pb.go](proto/telemetry/lldp/lldp_neighbor.pb.go) is the result of the following:
 
 ```console
-$ go build
+$ protoc --go_out=. \
+    --go_opt=Mproto/telemetry/lldp/lldp_neighbor.proto=proto/telemetry/lldp \
+    proto/telemetry/lldp/lldp_neighbor.proto
 ```
+
+## Running the examples
+
+After cloning the repo, go the a folder example and execute `go run main.go`. For example:
+
+```console
+$ cd example/configvalidate
+$ go run main.go 
+```
+
+### Links
+
+- [XR YANG models](https://github.com/YangModels/yang/tree/main/vendor/cisco/xr)
+- [XR Proto files](https://github.com/ios-xr/model-driven-telemetry/tree/master/protos)

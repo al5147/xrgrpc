@@ -1,12 +1,13 @@
 package xrgrpc
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"time"
 
 	pb "github.com/al5147/xrgrpc/proto/ems"
@@ -14,6 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // CiscoGrpcClient identifies the parameters for gRPC session setup.
@@ -39,7 +41,7 @@ func NewDevices() *Devices {
 // RouterOption is a funcion that sets one or more options for a given target.
 type RouterOption func(r *CiscoGrpcClient) error
 
-// BuildRouter is a traget constructor with options.
+// BuildRouter is a target constructor with options.
 func BuildRouter(opts ...RouterOption) (*CiscoGrpcClient, error) {
 	var router CiscoGrpcClient
 	for _, opt := range opts {
@@ -78,7 +80,7 @@ func WithHost(h string) RouterOption {
 	return func(r *CiscoGrpcClient) error {
 		_, err := net.ResolveTCPAddr("tcp", h)
 		if err != nil {
-			return errors.Wrap(err, "not a valid host address/port")
+			return fmt.Errorf("not a valid host address/port: %w", err)
 		}
 		r.Host = h
 		return nil
@@ -101,7 +103,7 @@ func WithTimeout(t int) RouterOption {
 func WithCert(f string) RouterOption {
 	return func(r *CiscoGrpcClient) error {
 		if _, err := os.Stat(f); os.IsNotExist(err) {
-			return errors.Wrap(err, "not a valid file location")
+			return fmt.Errorf("not a valid file location: %w", err)
 		}
 		r.Cert = f
 		// XR self-signed certificates are issued for CN=ems.cisco.com
@@ -138,24 +140,9 @@ func newClientTLS(xr CiscoGrpcClient) (credentials.TransportCredentials, error) 
 	}
 	// TODO: make skipVerify an input. If false, you need to provice the CA cert.
 	skipVerify := true
-	xr.Domain = "ems.cisco.com"
 
-	// certPool := x509.NewCertPool()
-
-	// Add CA cert. FILE LOCATION CANNOT BE HARDCODED!!!!
-	/* 	file := "../input/certificate/ca.cert"
-	   	b, err := ioutil.ReadFile(file)
-	   	if err != nil {
-	   		return nil, fmt.Errorf("problem reading CA file %s: %s", file, err)
-	   	}
-
-	   	if !certPool.AppendCertsFromPEM(b) {
-	   		return nil, fmt.Errorf("failed to append CA certificate")
-	   	} */
 	config := &tls.Config{
-		// ServerName:         xr.Domain,
 		InsecureSkipVerify: skipVerify,
-		// RootCAs:            certPool,
 	}
 	return credentials.NewTLS(config), nil
 }
@@ -168,16 +155,11 @@ func Connect(xr CiscoGrpcClient) (*grpc.ClientConn, context.Context, error) {
 	// creds provides the TLS credentials from the input certificate file.
 	creds, err := newClientTLS(xr)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to construct TLS credentials")
+		return nil, nil, fmt.Errorf("failed to construct TLS credentials: %w", err)
 	}
 
 	// Add TLS credentials to config options array.
 	opts = append(opts, grpc.WithTransportCredentials(creds))
-
-	// WithTimeout returns a DialOption that configures a timeout for dialing a ClientConn initially.
-	// This is valid if and only if WithBlock() is present
-	opts = append(opts, grpc.WithTimeout(time.Millisecond*time.Duration(2000)))
-	opts = append(opts, grpc.WithBlock())
 
 	// Add gRPC overall timeout to the config options array.
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*time.Duration(xr.Timeout))
@@ -191,7 +173,7 @@ func Connect(xr CiscoGrpcClient) (*grpc.ClientConn, context.Context, error) {
 	// conn represents a client connection to an RPC server (target).
 	conn, err := grpc.DialContext(ctx, xr.Host, opts...)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "fail to dial to target")
+		return nil, nil, fmt.Errorf("fail to dial to target: %w", err)
 	}
 	return conn, ctx, err
 }
@@ -200,11 +182,6 @@ func Connect(xr CiscoGrpcClient) (*grpc.ClientConn, context.Context, error) {
 func ConnectInsecure(xr CiscoGrpcClient) (*grpc.ClientConn, context.Context, error) {
 	// opts holds the config options to set up the connection.
 	var opts []grpc.DialOption
-
-	// WithTimeout returns a DialOption that configures a timeout for dialing a ClientConn initially.
-	// This is valid if and only if WithBlock() is present
-	opts = append(opts, grpc.WithTimeout(time.Millisecond*time.Duration(1500)))
-	opts = append(opts, grpc.WithBlock())
 
 	// Add gRPC overall timeout to the config options array.
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*time.Duration(xr.Timeout))
@@ -216,12 +193,12 @@ func ConnectInsecure(xr CiscoGrpcClient) (*grpc.ClientConn, context.Context, err
 		requireTLS: false}))
 
 	// Allow sending the credentials without TSL
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	// conn represents a client connection to an RPC server (target).
 	conn, err := grpc.DialContext(ctx, xr.Host, opts...)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "fail to dial to target")
+		return nil, nil, fmt.Errorf("fail to dial to target: %w", err)
 	}
 	return conn, ctx, err
 }
@@ -236,9 +213,9 @@ func ShowCmdTextOutput(ctx context.Context, conn *grpc.ClientConn, cli string, i
 	a := pb.ShowCmdArgs{ReqId: id, Cli: cli}
 
 	// 'st' is the streamed result that comes back from the target.
-	st, err := c.ShowCmdTextOutput(context.Background(), &a)
+	st, err := c.ShowCmdTextOutput(ctx, &a)
 	if err != nil {
-		return s, errors.Wrap(err, "gRPC ShowCmdTextOutput failed")
+		return s, fmt.Errorf("gRPC ShowCmdTextOutput failed: %w", err)
 	}
 
 	for {
@@ -248,8 +225,7 @@ func ShowCmdTextOutput(ctx context.Context, conn *grpc.ClientConn, cli string, i
 			return s, nil
 		}
 		if len(r.GetErrors()) != 0 {
-			si := strconv.FormatInt(id, 10)
-			return s, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+			return s, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 		}
 		if len(r.GetOutput()) > 0 {
 			s += r.GetOutput()
@@ -269,7 +245,7 @@ func ActionJSON(ctx context.Context, conn *grpc.ClientConn, j string, id int64) 
 	// 'st' is the streamed result that comes back from the target.
 	st, err := c.ActionJSON(context.Background(), &a)
 	if err != nil {
-		return s, errors.Wrap(err, "gRPC ActionJSON failed")
+		return s, fmt.Errorf("gRPC ActionJSON failed: %w", err)
 	}
 
 	for {
@@ -279,8 +255,7 @@ func ActionJSON(ctx context.Context, conn *grpc.ClientConn, j string, id int64) 
 			return s, nil
 		}
 		if len(r.GetErrors()) != 0 {
-			si := strconv.FormatInt(id, 10)
-			return s, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+			return s, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 		}
 		if len(r.GetYangjson()) > 0 {
 			s += r.GetYangjson()
@@ -299,9 +274,9 @@ func ShowCmdJSONOutput(ctx context.Context, conn *grpc.ClientConn, cli string, i
 	a := pb.ShowCmdArgs{ReqId: id, Cli: cli}
 
 	// 'st' is the streamed result that comes back from the target.
-	st, err := c.ShowCmdJSONOutput(context.Background(), &a)
+	st, err := c.ShowCmdJSONOutput(ctx, &a)
 	if err != nil {
-		return s, errors.Wrap(err, "gRPC ShowCmdJSONOutput failed")
+		return s, fmt.Errorf("gRPC ShowCmdJSONOutput failed: %w", err)
 	}
 
 	for {
@@ -311,8 +286,7 @@ func ShowCmdJSONOutput(ctx context.Context, conn *grpc.ClientConn, cli string, i
 			return s, nil
 		}
 		if len(r.GetErrors()) != 0 {
-			si := strconv.FormatInt(id, 10)
-			return s, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+			return s, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 		}
 		if len(r.GetJsonoutput()) > 0 {
 			s += r.GetJsonoutput()
@@ -331,9 +305,9 @@ func GetConfig(ctx context.Context, conn *grpc.ClientConn, js string, id int64) 
 	a := pb.ConfigGetArgs{ReqId: id, Yangpathjson: js}
 
 	// 'st' is the streamed result that comes back from the target.
-	st, err := c.GetConfig(context.Background(), &a)
+	st, err := c.GetConfig(ctx, &a)
 	if err != nil {
-		return s, errors.Wrap(err, "gRPC GetConfig failed")
+		return s, fmt.Errorf("gRPC GetConfig failed: %w", err)
 	}
 
 	for {
@@ -343,8 +317,7 @@ func GetConfig(ctx context.Context, conn *grpc.ClientConn, js string, id int64) 
 			return s, nil
 		}
 		if len(r.GetErrors()) != 0 {
-			si := strconv.FormatInt(id, 10)
-			return s, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+			return s, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 		}
 		if len(r.GetYangjson()) > 0 {
 			s += r.GetYangjson()
@@ -375,8 +348,7 @@ func GetOper(ctx context.Context, conn *grpc.ClientConn, js string, id int64) (s
 			return s, nil
 		}
 		if len(r.GetErrors()) != 0 {
-			si := strconv.FormatInt(id, 10)
-			return s, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+			return s, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 		}
 		if len(r.GetYangjson()) > 0 {
 			s += r.GetYangjson()
@@ -395,79 +367,53 @@ func CLIConfig(ctx context.Context, conn *grpc.ClientConn, cli string, id int64)
 	// 'r' is the result that comes back from the target.
 	r, err := c.CliConfig(ctx, &a)
 	if err != nil {
-		return errors.Wrap(err, "gRPC CliConfig failed")
+		return fmt.Errorf("gRPC CliConfig failed: %w", err)
 	}
 	if len(r.GetErrors()) != 0 {
-		si := strconv.FormatInt(id, 10)
-		return fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+		return fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 	}
 	return err
 }
 
 // CommitConfig commits a config. Need to clarify its use-case.
-func CommitConfig(ctx context.Context, conn *grpc.ClientConn, cm [2]string, id int64) (string, error) {
+func CommitConfig(ctx context.Context, conn *grpc.ClientConn, cm uint32, id int64) (string, error) {
 	var s string
 	// 'c' is the gRPC stub.
 	c := pb.NewGRPCConfigOperClient(conn)
-	si := strconv.FormatInt(id, 10)
-	// Commit metadata
-	m := pb.CommitMsg{Label: cm[0], Comment: cm[1]}
 
 	// 'a' is the object we send to the router via the stub.
-	a := pb.CommitArgs{Msg: &m, ReqId: id}
+	a := pb.CommitArgs{CommitID: cm, ReqId: id}
 
 	// 'r' is the result that comes back from the target.
-	r, err := c.CommitConfig(context.Background(), &a)
+	r, err := c.CommitConfig(ctx, &a)
 	if err != nil {
-		return s, errors.Wrap(err, "gRPC CommitConfig failed")
+		return s, fmt.Errorf("gRPC CommitConfig failed: %w", err)
 	}
 	if len(r.GetErrors()) != 0 {
-		return s, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+		return s, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 	}
 	// What about r.ResReqId. Seems to equal to id sent.
-	return r.Result.String(), err
+	return r.String(), err
 }
 
 // CommitReplace issues a cli and JSON config to the target.
 func CommitReplace(ctx context.Context, conn *grpc.ClientConn, cli, js string, id int64) error {
 	// 'c' is the gRPC stub.
 	c := pb.NewGRPCConfigOperClient(conn)
-	si := strconv.FormatInt(id, 10)
 
 	// 'a' is the object we send to the router via the stub.
 	a := pb.CommitReplaceArgs{Cli: cli, Yangjson: js, ReqId: id}
 
 	// 'r' is the result that comes back from the target.
-	r, err := c.CommitReplace(context.Background(), &a)
+	r, err := c.CommitReplace(ctx, &a)
 	if err != nil {
-		return errors.Wrap(err, "gRPC CommitReplace failed")
+		return fmt.Errorf("gRPC CommitReplace failed: %w", err)
 	}
 	if len(r.GetErrors()) != 0 {
-		return fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+		return fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 	}
 	return err
 }
-
-// DiscardConfig deletes configs with ID 'id' on the target.
-// Need to clarify its use-case.
-// func DiscardConfig(ctx context.Context, conn *grpc.ClientConn, id int64) (int64, error) {
-// 	// 'c' is the gRPC stub.
-// 	c := pb.NewGRPCConfigOperClient(conn)
-
-// 	// 'a' is the object we send to the router via the stub.
-// 	a := pb.DiscardChangesArgs{ReqId: id}
-
-// 	// 'r' is the result that comes back from the target.
-// 	r, err := c.ConfigDiscardChanges(context.Background(), &a)
-// 	if err != nil {
-// 		return -1, errors.Wrap(err, "gRPC ConfigDiscardChanges failed")
-// 	}
-// 	if len(r.GetErrors()) != 0 {
-// 		si := strconv.FormatInt(id, 10)
-// 		return -1, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
-// 	}
-// 	return r.ResReqId, nil
-// }
 
 // MergeConfig configs the target with YANG/JSON config specified in 'js'.
 func MergeConfig(ctx context.Context, conn *grpc.ClientConn, js string, id int64) (int64, error) {
@@ -480,11 +426,10 @@ func MergeConfig(ctx context.Context, conn *grpc.ClientConn, js string, id int64
 	// 'r' is the result that comes back from the target.
 	r, err := c.MergeConfig(ctx, &a)
 	if err != nil {
-		return -1, errors.Wrap(err, "gRPC MergeConfig failed")
+		return -1, fmt.Errorf("gRPC MergeConfig failed: %w", err)
 	}
 	if len(r.GetErrors()) != 0 {
-		si := strconv.FormatInt(id, 10)
-		return -1, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+		return -1, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 	}
 	return r.ResReqId, nil
 }
@@ -501,11 +446,10 @@ func DeleteConfig(ctx context.Context, conn *grpc.ClientConn, js string, id int6
 	// 'r' is the result that comes back from the target.
 	r, err := c.DeleteConfig(ctx, &a)
 	if err != nil {
-		return -1, errors.Wrap(err, "gRPC DeleteConfig failed")
+		return -1, fmt.Errorf("gRPC DeleteConfig failed: %w", err)
 	}
 	if len(r.GetErrors()) != 0 {
-		si := strconv.FormatInt(id, 10)
-		return -1, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+		return -1, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 	}
 	return r.ResReqId, nil
 }
@@ -522,11 +466,10 @@ func ReplaceConfig(ctx context.Context, conn *grpc.ClientConn, js string, id int
 	// 'r' is the result that comes back from the target.
 	r, err := c.ReplaceConfig(ctx, &a)
 	if err != nil {
-		return -1, errors.Wrap(err, "gRPC ReplaceConfig failed")
+		return -1, fmt.Errorf("gRPC ReplaceConfig failed: %w", err)
 	}
 	if len(r.GetErrors()) != 0 {
-		si := strconv.FormatInt(id, 10)
-		return -1, fmt.Errorf("error triggered by remote host for ReqId: %s; %s", si, r.GetErrors())
+		return -1, fmt.Errorf("error triggered by remote host for ReqId: %v; %s", id, r.GetErrors())
 	}
 	return r.ResReqId, nil
 }
@@ -547,9 +490,8 @@ func GetSubscription(ctx context.Context, conn *grpc.ClientConn, p string, id in
 	// 'r' is the result that comes back from the target.
 	st, err := c.CreateSubs(ctx, &a)
 	if err != nil {
-		return b, e, errors.Wrap(err, "gRPC CreateSubs failed")
+		return b, e, fmt.Errorf("gRPC CreateSubs failed: %w", err)
 	}
-	si := strconv.FormatInt(id, 10)
 
 	// TODO: Review the logic. Make sure this goroutine ends and propagate
 	// error messages
@@ -557,12 +499,12 @@ func GetSubscription(ctx context.Context, conn *grpc.ClientConn, p string, id in
 		r, err := st.Recv()
 		if err != nil {
 			close(b)
-			e <- fmt.Errorf("error triggered by remote host: %s, ReqID: %s", err, si)
+			e <- fmt.Errorf("error triggered by remote host: %s, ReqID: %v", err, id)
 			return
 		}
 		if len(r.GetErrors()) != 0 {
 			close(b)
-			e <- fmt.Errorf("error triggered by remote host: %s, ReqID: %s", r.GetErrors(), si)
+			e <- fmt.Errorf("error triggered by remote host: %s, ReqID: %v", r.GetErrors(), id)
 			return
 		}
 		for {

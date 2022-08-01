@@ -1,8 +1,9 @@
-// Big TODO: current coverage: 66.2% of statements
 package xrgrpc_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -11,36 +12,36 @@ import (
 
 	xr "github.com/al5147/xrgrpc"
 	pb "github.com/al5147/xrgrpc/proto/ems"
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
 const (
-	defaultAddr    = "localhost"
-	defaultPort    = ":57344"
-	defaultUser    = "test"
-	defaultPass    = "test"
-	defaultCert    = "test/cert.pem"
-	defaultKey     = "test/key.pem"
-	defaultCmd     = "show test"
-	defaultYang    = "{\"Cisco-IOS-XR-test:tree\": [null]}"
-	defaultSubsID  = "TEST"
-	wrongCmd       = "show me the money"
-	wrongConf      = "confreg 0x00"
-	wrongYang      = "{\"Cisco-IOS-XR-fake:tree\": [null]}"
-	wrongCreds     = "incorrect username/password"
-	wrongSubsID    = "wrong Subscription ID"
-	wrongEncode    = "wrong encoding"
-	wrongCmdErr    = "wrong command"
-	wrongYangErr   = "wrong YANG path"
-	defaultTimeout = 5
+	defaultAddr            = "localhost"
+	defaultPort            = ":57344"
+	defaultUser            = "test"
+	defaultPass            = "test"
+	defaultCert            = "test/cert.pem"
+	defaultKey             = "test/key.pem"
+	defaultCmd             = "show test"
+	defaultYang            = "{\"Cisco-IOS-XR-test:tree\": [null]}"
+	defaultSubsID          = "TEST"
+	defaultCommitID uint32 = 100000002
+	wrongCmd               = "show me the money"
+	wrongConf              = "confreg 0x00"
+	wrongYang              = "{\"Cisco-IOS-XR-fake:tree\": [null]}"
+	wrongCreds             = "incorrect username/password"
+	wrongSubsID            = "wrong Subscription ID"
+	wrongEncode            = "wrong encoding"
+	wrongCmdErr            = "wrong command"
+	wrongYangErr           = "wrong YANG path"
+	wrongCommitID          = "wrong Commit ID"
+	defaultTimeout         = 5
 )
 
 // execServer implements the GRPCExecServer interface
-type execServer struct{}
+type execServer struct{ pb.UnimplementedGRPCExecServer }
 
 func (s *execServer) ShowCmdTextOutput(a *pb.ShowCmdArgs, stream pb.GRPCExec_ShowCmdTextOutputServer) error {
 	if a.GetCli() != defaultCmd {
@@ -116,7 +117,9 @@ func (s *execServer) ActionJSON(a *pb.ActionJSONArgs, stream pb.GRPCExec_ActionJ
 }
 
 // operConfigServer implements the GRPCConfigOperServer interface
-type operConfigServer struct{}
+type operConfigServer struct {
+	pb.UnimplementedGRPCConfigOperServer
+}
 
 func (s *operConfigServer) GetConfig(a *pb.ConfigGetArgs, stream pb.GRPCConfigOper_GetConfigServer) error {
 	if a.GetYangpathjson() != defaultYang {
@@ -211,19 +214,16 @@ func (s *operConfigServer) CommitReplace(ctx context.Context, a *pb.CommitReplac
 
 // CommitConfig commits a config. Need to clarify its use-case.
 func (s *operConfigServer) CommitConfig(ctx context.Context, a *pb.CommitArgs) (r *pb.CommitReply, err error) {
-	Msg := pb.CommitMsg{Label: "test", Comment: "test"}
-	if *a.GetMsg() != Msg {
-		err = errors.New(wrongCmdErr)
+	if a.GetCommitID() != defaultCommitID {
+		err = errors.New(wrongCommitID)
 		r = &pb.CommitReply{
-			Result:   pb.CommitResult_FAIL,
 			ResReqId: a.GetReqId(),
-			Errors:   wrongCmdErr,
+			Errors:   wrongCommitID,
 		}
 		return
 	}
 	r = &pb.CommitReply{
 		ResReqId: a.GetReqId(),
-		Result:   pb.CommitResult_CHANGE,
 	}
 	return
 }
@@ -353,7 +353,7 @@ func Server(t *testing.T, svc string) *grpc.Server {
 	}
 	creds, err := credentials.NewServerTLSFromFile(defaultCert, defaultKey)
 	if err != nil {
-		t.Fatalf("failed to construct TLS credentialst: %v", err)
+		t.Fatalf("failed to construct TLS credentials: %v", err)
 	}
 	// var opts []grpc.ServerOption
 	s := grpc.NewServer(
@@ -434,6 +434,7 @@ func TestConnect(t *testing.T) {
 		{name: "wrong target", target: "192.168.0.1:57344", err: "TBD"},
 		{name: "wrong certificate", certf: "example/input/certificate/ems5502-1.pem", err: "TBD"},
 		{name: "inexistent certificate", certf: "dummy", err: "TBD"},
+		{name: "No certificate", certf: "empty"},
 	}
 	s := Server(t, "none")
 
@@ -443,6 +444,9 @@ func TestConnect(t *testing.T) {
 			xc := x
 			if tc.certf != "" {
 				xc.Cert = tc.certf
+			}
+			if tc.certf == "empty" {
+				xc.Cert = ""
 			}
 			if tc.target != "" {
 				xc.Host = tc.target
@@ -625,47 +629,47 @@ func TestShowCmdJSONOutput(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 }
 
-func TestActionJSONOutput(t *testing.T) {
-	x := xr.CiscoGrpcClient{
-		User:     defaultUser,
-		Password: defaultPass,
-		Host:     strings.Join([]string{defaultAddr, defaultPort}, ""),
-		Cert:     defaultCert,
-		Domain:   "localhost",
-		Timeout:  defaultTimeout,
-	}
-	tt := []struct {
-		name string
-		act  string
-		err  string
-	}{
-		{name: "local connection", act: defaultYang},
-		{name: "wrong command", act: wrongCmd, err: wrongCmdErr},
-	}
-	s := Server(t, "exec")
-	conn, ctx, err := xr.Connect(x)
-	if err != nil {
-		t.Fatalf("could not setup a client connection to %v", x.Host)
-	}
-	var id int64 = 1
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := xr.ActionJSON(ctx, conn, tc.act, id)
-			if err != nil {
-				if strings.Contains(err.Error(), wrongCmdErr) && tc.err == wrongCmdErr {
-					return
-				}
-				t.Fatalf("failed to get action json output from %v", x.Host)
-			}
-		})
-		id++
-	}
-	conn.Close()
-	s.Stop()
-	// To avoid tests failing in Travis CI, we sleep for 0.2 seconds, otherwise it
-	// reports 'bind: address already in use' when trying to run the next function test
-	time.Sleep(200 * time.Millisecond)
-}
+// func TestActionJSONOutput(t *testing.T) {
+// 	x := xr.CiscoGrpcClient{
+// 		User:     defaultUser,
+// 		Password: defaultPass,
+// 		Host:     strings.Join([]string{defaultAddr, defaultPort}, ""),
+// 		Cert:     defaultCert,
+// 		Domain:   "localhost",
+// 		Timeout:  defaultTimeout,
+// 	}
+// 	tt := []struct {
+// 		name string
+// 		act  string
+// 		err  string
+// 	}{
+// 		{name: "local connection", act: defaultYang},
+// 		{name: "wrong command", act: wrongCmd, err: wrongCmdErr},
+// 	}
+// 	s := Server(t, "exec")
+// 	conn, ctx, err := xr.Connect(x)
+// 	if err != nil {
+// 		t.Fatalf("could not setup a client connection to %v", x.Host)
+// 	}
+// 	var id int64 = 1
+// 	for _, tc := range tt {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			_, err := xr.ActionJSON(ctx, conn, tc.act, id)
+// 			if err != nil {
+// 				if strings.Contains(err.Error(), wrongCmdErr) && tc.err == wrongCmdErr {
+// 					return
+// 				}
+// 				t.Fatalf("failed to get action json output from %v", x.Host)
+// 			}
+// 		})
+// 		id++
+// 	}
+// 	conn.Close()
+// 	s.Stop()
+// 	// To avoid tests failing in Travis CI, we sleep for 0.2 seconds, otherwise it
+// 	// reports 'bind: address already in use' when trying to run the next function test
+// 	time.Sleep(200 * time.Millisecond)
+// }
 
 func TestGetConfig(t *testing.T) {
 	x := xr.CiscoGrpcClient{
@@ -996,21 +1000,20 @@ func TestCommitConfig(t *testing.T) {
 		Domain:   "localhost",
 		Timeout:  defaultTimeout,
 	}
-	defaultMsg := [2]string{"test", "test"}
 
 	tt := []struct {
 		name string
-		msg  [2]string
+		cid  uint32
 		user string
 		pass string
 		err  string
 	}{
 		// The order of these test do matter, we change credentials
 		// on the last ones.
-		{name: "local connection", msg: defaultMsg},
-		{name: "wrong config", msg: [2]string{"unknown", "anything"}, err: wrongCmdErr},
-		{name: "wrong user", msg: defaultMsg, user: "bob", err: wrongCreds},
-		{name: "wrong password", msg: defaultMsg, pass: "password", err: wrongCreds},
+		{name: "local connection", cid: defaultCommitID},
+		{name: "wrong config", cid: defaultCommitID, err: wrongCmdErr},
+		{name: "wrong user", cid: defaultCommitID, user: "bob", err: wrongCreds},
+		{name: "wrong password", cid: defaultCommitID, pass: "password", err: wrongCreds},
 	}
 	s := Server(t, "opercon")
 	conn, ctx, err := xr.Connect(x)
@@ -1038,7 +1041,7 @@ func TestCommitConfig(t *testing.T) {
 					t.Fatalf("could not setup a client connection to %v", x.Host)
 				}
 			}
-			_, err := xr.CommitConfig(ctx, conn, tc.msg, id)
+			_, err := xr.CommitConfig(ctx, conn, tc.cid, id)
 			if err != nil {
 				if strings.Contains(err.Error(), wrongCreds) && tc.err == wrongCreds {
 					return
