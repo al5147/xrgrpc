@@ -13,9 +13,9 @@ import (
 	"reflect"
 	"time"
 
-	xr "github.com/nleiva/xrgrpc"
-	"github.com/nleiva/xrgrpc/proto/telemetry"
-	lldp "github.com/nleiva/xrgrpc/proto/telemetry/lldp"
+	xr "github.com/al5147/xrgrpc"
+	"github.com/al5147/xrgrpc/proto/telemetry"
+	"github.com/al5147/xrgrpc/proto/telemetry/lldp"
 	"google.golang.org/protobuf/proto"
 )
 

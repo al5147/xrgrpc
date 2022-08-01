@@ -11,8 +11,6 @@ import (
 	"time"
 
 	pb "github.com/al5147/xrgrpc/proto/ems"
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -338,7 +336,7 @@ func GetOper(ctx context.Context, conn *grpc.ClientConn, js string, id int64) (s
 	// 'st' is the streamed result that comes back from the target.
 	st, err := c.GetOper(context.Background(), &a)
 	if err != nil {
-		return s, errors.Wrap(err, "gRPC GetConfig failed")
+		return s, fmt.Errorf("gRPC GetOper failed: %w", err)
 	}
 
 	for {
